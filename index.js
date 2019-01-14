@@ -1,11 +1,11 @@
 'use strict';
-const toBytes = s => Array.from(s).map(c => c.charCodeAt(0));
+const toBytes = s => [...s].map(c => c.charCodeAt(0));
 const xpiZipFilename = toBytes('META-INF/mozilla.rsa');
 const oxmlContentTypes = toBytes('[Content_Types].xml');
 const oxmlRels = toBytes('_rels/.rels');
 
 module.exports = input => {
-	const buf = (input instanceof Uint8Array) ? input : new Uint8Array(input);
+	const buf = input instanceof Uint8Array ? input : new Uint8Array(input);
 
 	if (!(buf && buf.length > 1)) {
 		return null;
@@ -278,7 +278,7 @@ module.exports = input => {
 
 		if (idPos !== -1) {
 			const docTypePos = idPos + 3;
-			const findDocType = type => Array.from(type).every((c, i) => sliced[docTypePos + i] === c.charCodeAt(0));
+			const findDocType = type => [...type].every((c, i) => sliced[docTypePos + i] === c.charCodeAt(0));
 
 			if (findDocType('matroska')) {
 				return {
@@ -307,17 +307,69 @@ module.exports = input => {
 		};
 	}
 
-	if (
-		check([0x52, 0x49, 0x46, 0x46]) &&
-		check([0x41, 0x56, 0x49], {offset: 8})
-	) {
-		return {
-			ext: 'avi',
-			mime: 'video/x-msvideo'
-		};
+	// RIFF file format which might be AVI, WAV, QCP, etc
+	if (check([0x52, 0x49, 0x46, 0x46])) {
+		if (check([0x41, 0x56, 0x49], {offset: 8})) {
+			return {
+				ext: 'avi',
+				mime: 'video/vnd.avi'
+			};
+		}
+		if (check([0x57, 0x41, 0x56, 0x45], {offset: 8})) {
+			return {
+				ext: 'wav',
+				mime: 'audio/vnd.wave'
+			};
+		}
+		// QLCM, QCP file
+		if (check([0x51, 0x4C, 0x43, 0x4D], {offset: 8})) {
+			return {
+				ext: 'qcp',
+				mime: 'audio/qcelp'
+			};
+		}
 	}
 
+	function readUInt64LE(buf, offset = 0) {
+		let n = buf[offset];
+		let mul = 1;
+		let i = 0;
+		while (++i < 8) {
+			mul *= 0x100;
+			n += buf[offset + i] * mul;
+		}
+		return n;
+	}
+
+	// ASF_Header_Object first 80 bytes
 	if (check([0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0xA6, 0xD9])) {
+		// Search for header should be in first 1KB of file.
+
+		let offset = 30;
+		do {
+			const objectSize = readUInt64LE(buf, offset + 16);
+			if (check([0x91, 0x07, 0xDC, 0xB7, 0xB7, 0xA9, 0xCF, 0x11, 0x8E, 0xE6, 0x00, 0xC0, 0x0C, 0x20, 0x53, 0x65], {offset})) {
+				// Sync on Stream-Properties-Object (B7DC0791-A9B7-11CF-8EE6-00C00C205365)
+				if (check([0x40, 0x9E, 0x69, 0xF8, 0x4D, 0x5B, 0xCF, 0x11,	0xA8, 0xFD, 0x00, 0x80, 0x5F, 0x5C, 0x44, 0x2B], {offset: offset + 24})) {
+					// Found Audio:
+					return {
+						ext: 'wma',
+						mime: 'audio/x-ms-wma'
+					};
+				}
+
+				if (check([0xC0, 0xEF, 0x19, 0xBC, 0x4D, 0x5B, 0xCF, 0x11,	0xA8, 0xFD, 0x00, 0x80, 0x5F, 0x5C, 0x44, 0x2B], {offset: offset + 24})) {
+					// Found Audio:
+					return {
+						ext: 'wmv',
+						mime: 'video/x-ms-wmv'
+					};
+				}
+			}
+			offset += objectSize;
+		} while (offset + 24 <= buf.length);
+
+		// Default to WMV
 		return {
 			ext: 'wmv',
 			mime: 'video/x-ms-wmv'
@@ -361,15 +413,33 @@ module.exports = input => {
 				mime: 'audio/mpeg'
 			};
 		}
+
+		if (
+			check([0xFF, 0xF8], {offset: start, mask: [0xFF, 0xFC]}) // MPEG 2 layer 0 using ADTS
+		) {
+			return {
+				ext: 'mp2',
+				mime: 'audio/mpeg'
+			};
+		}
+
+		if (
+			check([0xFF, 0xF0], {offset: start, mask: [0xFF, 0xFC]}) // MPEG 4 layer 0 using ADTS
+		) {
+			return {
+				ext: 'mp4',
+				mime: 'audio/mpeg'
+			};
+		}
 	}
 
 	if (
 		check([0x66, 0x74, 0x79, 0x70, 0x4D, 0x34, 0x41], {offset: 4}) ||
 		check([0x4D, 0x34, 0x41, 0x20])
 	) {
-		return {
+		return { // MPEG-4 layer 3 (audio)
 			ext: 'm4a',
-			mime: 'audio/m4a'
+			mime: 'audio/mp4' // RFC 4337
 		};
 	}
 
@@ -437,13 +507,10 @@ module.exports = input => {
 		};
 	}
 
-	if (
-		check([0x52, 0x49, 0x46, 0x46]) &&
-		check([0x57, 0x41, 0x56, 0x45], {offset: 8})
-	) {
+	if (check([0x4D, 0x41, 0x43, 0x20])) {
 		return {
-			ext: 'wav',
-			mime: 'audio/x-wav'
+			ext: 'ape',
+			mime: 'audio/ape'
 		};
 	}
 
@@ -768,6 +835,13 @@ module.exports = input => {
 				mime: 'image/heic-sequence'
 			};
 		}
+	}
+
+	if (check([0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A])) {
+		return {
+			ext: 'ktx',
+			mime: 'image/ktx'
+		};
 	}
 
 	return null;

@@ -85,13 +85,18 @@ const types = [
 	'jpx',
 	'mj2',
 	'aif',
+	'qcp',
 	'odt',
 	'ods',
 	'odp',
 	'xml',
 	'mobi',
 	'heic',
-	'cur'
+	'ktx',
+	'cur',
+	'ape',
+	'wmv',
+	'wma'
 ];
 
 const names = {
@@ -100,9 +105,10 @@ const names = {
 	woff: ['fixture', 'fixture-otto'],
 	eot: ['fixture', 'fixture-0x20001'],
 	mov: ['fixture', 'fixture-mjpeg'],
-	mp2: ['fixture', 'fixture-mpa'],
+	mp2: ['fixture', 'fixture-mpa', 'fixture-faac-adts'],
 	mp3: ['fixture', 'fixture-offset1-id3', 'fixture-offset1', 'fixture-mp2l3', 'fixture-ffe3'],
-	mp4: ['fixture-imovie', 'fixture-isom', 'fixture-isomv2', 'fixture-mp4v2', 'fixture-m4v', 'fixture-dash'],
+	mp4: ['fixture-imovie', 'fixture-isom', 'fixture-isomv2', 'fixture-mp4v2',
+		'fixture-m4v', 'fixture-dash', 'fixture-aac-adts'],
 	tif: ['fixture-big-endian', 'fixture-little-endian'],
 	gz: ['fixture.tar'],
 	xz: ['fixture.tar'],
@@ -111,7 +117,10 @@ const names = {
 	mkv: ['fixture', 'fixture2'],
 	mxf: ['fixture'],
 	mpg: ['fixture', 'fixture2'],
-	heic: ['fixture-mif1', 'fixture-msf1', 'fixture-heic']
+	heic: ['fixture-mif1', 'fixture-msf1', 'fixture-heic'],
+	ape: ['fixture-monkeysaudio'],
+	wmv: ['fixture'],
+	wma: ['fixture']
 };
 
 function testFile(t, type, name) {
